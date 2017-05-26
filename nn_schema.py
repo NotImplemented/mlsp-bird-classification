@@ -1,11 +1,18 @@
 import tensorflow
 
 def weight_variable(shape):
-    initial = tensorflow.truncated_normal(shape, stddev=0.12)
-    return tensorflow.Variable(initial)
+
+    #initial = tensorflow.contrib.layers.xavier_initializer_conv2d()
+    #variable = tensorflow.Variable(initial(shape))
+
+    initial = tensorflow.truncated_normal(shape, stddev = 0.4)
+    variable = tensorflow.Variable(initial)
+
+    return variable
 
 def bias_variable(shape):
-    initial = tensorflow.constant(0.12, shape = shape)
+
+    initial = tensorflow.constant(0.4, shape = shape)
     return tensorflow.Variable(initial)
 
 def convolution_layer(x, W):
@@ -14,6 +21,8 @@ def convolution_layer(x, W):
 def max_pooling_layer(x, height = 2, width = 2):
     return tensorflow.nn.max_pool(x, ksize=[1, height, width, 1], strides=[1, height, width, 1], padding='SAME')
 
+def avg_pooling_layer(x, height = 2, width = 2):
+    return tensorflow.nn.avg_pool(x, ksize=[1, height, width, 1], strides=[1, height, width, 1], padding='SAME')
 
 def variable_summaries(var):
 
@@ -31,7 +40,7 @@ def variable_summaries(var):
         tensorflow.summary.histogram('histogram', var)
 
 
-def create_convolution_layer(layer_name, input_tensor, input_features, output_features):
+def create_convolution_layer(layer_name, input_tensor, width, height, input_features, output_features):
 
     # TODO: Calculate input features count
     # TODO: Introduce window size argument
@@ -39,7 +48,7 @@ def create_convolution_layer(layer_name, input_tensor, input_features, output_fe
     with tensorflow.name_scope(layer_name):
 
         with tensorflow.name_scope('weights'):
-            Weight_convolution = weight_variable([6, 6, input_features, output_features])
+            Weight_convolution = weight_variable([width, height, input_features, output_features])
             variable_summaries(Weight_convolution)
 
         with tensorflow.name_scope('biases'):
@@ -53,6 +62,15 @@ def create_convolution_layer(layer_name, input_tensor, input_features, output_fe
 
         return h_convolution
 
+def create_avg_pooling_layer(layer_name, input_tensor, width, height):
+
+    with tensorflow.name_scope(layer_name):
+        h_pooling = avg_pooling_layer(input_tensor)
+        print('h_pooling size = {}'.format(h_pooling.get_shape()))
+
+        tensorflow.summary.histogram('subsampling', h_pooling)
+
+        return h_pooling
 
 def create_max_pooling_layer(layer_name, input_tensor):
 
@@ -66,25 +84,24 @@ def create_max_pooling_layer(layer_name, input_tensor):
 
 def create_convolution_layers(input_image):
 
-    conv_1st = create_convolution_layer('conv-1st', input_image, 1, 16)
+    #pool_0th = create_avg_pooling_layer('pool-0th', input_image, 2, 2)
+
+    conv_1st = create_convolution_layer('conv-1st', input_image, 5, 5, 1, 64)
     pool_1st = create_max_pooling_layer('pool-1st', conv_1st)
 
-    conv_2nd = create_convolution_layer('conv-2nd', pool_1st, 16, 32)
+    conv_2nd = create_convolution_layer('conv-2nd', pool_1st, 5, 5, 64, 64)
     pool_2nd = create_max_pooling_layer('pool-2nd', conv_2nd)
 
-    conv_3rd = create_convolution_layer('conv-3rd', pool_2nd, 32, 64)
+    conv_3rd = create_convolution_layer('conv-3rd', pool_2nd, 5, 5, 64, 128)
     pool_3rd = create_max_pooling_layer('pool-3rd', conv_3rd)
 
-    conv_4th = create_convolution_layer('conv-4th', pool_3rd, 64, 128)
+    conv_4th = create_convolution_layer('conv-4th', pool_3rd, 5, 5, 128, 256)
     pool_4th = create_max_pooling_layer('pool-4th', conv_4th)
-
-    conv_5th = create_convolution_layer('conv-5th', pool_4th, 128, 256)
+    
+    conv_5th = create_convolution_layer('conv-5th', pool_4th, 3, 3, 256, 256)
     pool_5th = create_max_pooling_layer('pool-5th', conv_5th)
 
-    conv_6th = create_convolution_layer('conv-6th', pool_5th, 256, 512)
-    pool_6th = create_max_pooling_layer('pool-6th', conv_6th)
-
-    return pool_6th
+    return pool_5th
 
 def create_fully_connected_layer(layer_name, input_layer, input_features, output_features):
 
@@ -111,7 +128,6 @@ def create_fully_connected_layers(input_layer, output_classes, keep_probability)
     fc_2nd = create_fully_connected_layer('fc-2nd', fc1_drop, 256, output_classes)
 
     return fc_2nd
-
 
 def create_schema(x_image, output_classes, keep_probability):
 

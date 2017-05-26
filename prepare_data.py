@@ -5,17 +5,18 @@ import struct
 import matplotlib.image
 import matplotlib.pyplot
 import tensorflow
-import fourier
+import wave
+import math
 from time import ctime
 import time as time_module
 
 
-output_classes = 87
+output_classes = 19
 
 sample_size = 512
-time_shift = int(sample_size * 0.75)
-max_song_length = 6.5
-max_frame_rate = 44100
+time_shift = int(sample_size * 0.25)
+max_song_length = 10
+max_frame_rate = 16000
 max_spectrogram_length = int((max_frame_rate * max_song_length - sample_size) / time_shift + 1)
 rows = int(sample_size / 2)
 
@@ -23,10 +24,70 @@ image_rows = rows
 image_columns = max_spectrogram_length
 dataset_size = 1024
 
-wav_path_train = os.path.join('NIPS4B_BIRD_CHALLENGE_TRAIN_TEST_WAV', 'train')
-wav_path_test = os.path.join('NIPS4B_BIRD_CHALLENGE_TRAIN_TEST_WAV', 'test')
+wav_path = os.path.join('mlsp_contest_dataset', 'essential_data', 'src_wavs')
+rec_id2filename = os.path.join('mlsp_contest_dataset', 'essential_data', 'rec_id2filename.txt')
+rec_id2test = os.path.join('mlsp_contest_dataset', 'essential_data', 'CVfolds_2.txt')
+rec_id2label = os.path.join('mlsp_contest_dataset', 'essential_data', 'rec_labels_test_hidden.txt')
 
-labels_path = os.path.join('NIPS4B_BIRD_CHALLENGE_TRAIN_LABELS', 'nips4b_birdchallenge_train_labels.csv')
+filter = [] #['PC4_20100705_050000_0010', 'PC4_20100705_050000_0020']
+
+def erode(spectrogram, rows, columns):
+    for i in range(rows):
+        for j in range(columns):
+            count = 0
+            direction = [ [0,1], [1,0], [-1,0], [0,-1] ]
+            for k in range(len(direction)):
+                x = i + direction[k][0]
+                y = j + direction[k][1]
+                if x >= 0 and x < rows and y >= 0 and y < columns:
+                    if spectrogram[x,y] == 1.0 or spectrogram[x,y] == 2.0:
+                        count += 1
+            if count != 4:
+                spectrogram[i,j] = 2.0
+
+    for i in range(rows):
+        for j in range(columns):
+            if spectrogram[i,j] == 2.0:
+                spectrogram[i,j] = 0.0
+
+def dilate(spectrogram, rows, columns):
+    for i in range(rows):
+        for j in range(columns):
+            count = 0
+
+            for a in range(2):
+                for b in range(2):
+                    x = i + a
+                    y = j + b
+                    if x >= 0 and x < rows and y >= 0 and y < columns:
+                        if spectrogram[x,y] == 1.0:
+                            count += 1
+            if count > 0:
+                spectrogram[i,j] = 2.0
+
+    for i in range(rows):
+        for j in range(columns):
+            if spectrogram[i,j] == 2.0:
+                spectrogram[i,j] = 1.0
+
+def median_filtering(spectrogram, rows, columns):
+    row_sum = numpy.ndarray(rows)
+    column_sum = numpy.ndarray(columns)
+
+    for i in range(rows - (first_cut + last_cut)):
+        for j in range(columns):
+            column_sum[j] += spectrogram[i, j]
+            row_sum[i] += spectrogram[i, j]
+    
+    row_sum /= columns
+    column_sum /= (rows - (first_cut + last_cut))
+
+    for i in range(rows - (first_cut + last_cut)):
+        for j in range(columns):
+            if spectrogram[i, j] > column_sum[j] * 2.5 or spectrogram[i, j] > row_sum[i] * 2.5:
+                spectrogram[i, j] = 1.0
+            else:
+                spectrogram[i, j] = 0.0;
 
 def cook_spectrogram(file_path):
 
@@ -39,69 +100,79 @@ def cook_spectrogram(file_path):
     sample_width = sound.getsampwidth()
     sound_channels = sound.getnchannels()
 
-    print('Processing file {}: channels = {}, frames count = {}, frame rate = {}, sample width = {}, duration = {:.4f} seconds'.format(
+    print('{}: channels = {}, frames = {}, frame rate = {}, sample width = {}, duration = {:.4f} seconds'.format(
             file_path, sound_channels, frames_count, frame_rate, sample_width, float(frames_count) / frame_rate))
 
     raw_sound = sound.readframes(frames_count)
     time = 0
 
-    spectrogram = numpy.ndarray((rows, max_spectrogram_length))
+    first_cut = 0
+    last_cut = 0
+
+    spectrogram = numpy.ndarray((rows - (first_cut + last_cut) , max_spectrogram_length))
+    print('Raw sound data length = {}'.format(len(raw_sound)))
+
+    hann = numpy.ndarray((1, sample_size))
+    for n in range(sample_size):
+        hann[(0, n)] = 0.5 * (1 - numpy.cos(2 * math.pi * n / (sample_size-1)))
+
+    print('{}: raw sound length = {}'.format(file_path, len(raw_sound)))
+    print('{}: spectrogram columns = {}'.format(file_path, max_spectrogram_length))
 
     index = 0
-    while time + sample_size < frames_count and index < max_spectrogram_length:
+    while time + sample_size * 2 <= len(raw_sound):
 
-        raw_bytes = raw_sound[time * 2: (time + sample_size) * 2]
-        converted_data = numpy.fromstring(raw_bytes, dtype=numpy.int16)
-        fourier = numpy.fft.fft(converted_data)
+        raw_bytes = raw_sound[time : time + sample_size * 2]
+        converted_data = numpy.fromstring(raw_bytes, dtype = numpy.int16)
+
+        windowed_data = numpy.multiply(converted_data, hann)
+        fourier = numpy.fft.fft(windowed_data)
 
         # get only half of fourier coefficients
         fourier_normalized_converted = numpy.ndarray((1, rows))
         fourier_normalized_absolute = numpy.ndarray((1, rows))
 
-        epsilon = 0.000002
-        minimal_greater_than_zero = epsilon
         for i in range(rows):
+            value = numpy.abs(fourier[(0, i)])
+            fourier_normalized_absolute[(0, i)] = value
 
-            value = numpy.abs(fourier[i])
-            if value > 0.0 and minimal_greater_than_zero > value:
-                minimal_greater_than_zero = value
-            fourier_normalized_absolute[(0, i)] = value + 1.0
-
-        # take logarithm and check for infinity
         for i in range(rows):
-            fourier_normalized_converted[(0, i)] = 10*numpy.log10(max(fourier_normalized_absolute[(0, i)], minimal_greater_than_zero))
+            fourier_normalized_converted[(0, i)] = 20 * numpy.log10(fourier_normalized_absolute[(0, i)] + 1.0)
 
         #for i in range(rows):
-            #fourier_normalized_converted[(0, i)] = fourier_normalized_absolute[(0, i)]
+        #    fourier_normalized_converted[(0, i)] = numpy.sqrt(fourier_normalized_absolute[(0, i)] + 1.0)
 
-        #mx = numpy.max(fourier_normalized_converted)
-        #mn = numpy.min(fourier_normalized_converted)
+        #for i in range(rows):
+        #    fourier_normalized_converted[(0, i)] = fourier_normalized_absolute[(0, i)]
 
-        #fourier_normalized_converted = (fourier_normalized_converted - mn) / (mx - mn)
+        # strip first and last frequences
+        spectrogram[:, index] = fourier_normalized_converted[0, first_cut : rows - last_cut]
 
-        spectrogram[:, index] = fourier_normalized_converted
-
-        #if numpy.max(fourier_normalized_converted) == float('inf'):
-        #    print("!")
-
-        time += time_shift
+        time += time_shift * 2
         index += 1
 
-    # append if necessary
-    start_index = 0
-    while index < max_spectrogram_length:
-        spectrogram[:, index] = spectrogram[:, start_index]
-        start_index += 1
-        index += 1
+    print('{}: columns = {}'.format(file_path, index))
 
     mx = numpy.max(spectrogram)
     mn = numpy.min(spectrogram)
 
+    mean = numpy.mean(spectrogram)
+    #spectrogram -= mean
+    std = numpy.std(spectrogram)
+    #spectrogram /= std
+
     spectrogram = (spectrogram - mn) / (mx - mn)
 
-    print('Test file {}: max = {}, min = {}'.format(file_path, mx, mn))
+    #spectrogram = numpy.sqrt(spectrogram)
 
-    show_spectrogram(spectrogram, 'sample')
+    print('{}: max = {:.4f}, min = {:.4f}, mean = {:.4f}, stddev = {:.4f}'.format(file_path, mx, mn, mean, std))
+
+    columns = max_spectrogram_length
+
+    #erode(spectrogram, rows, columns)
+    #dilate(spectrogram, rows, columns)
+
+    #show_spectrogram(spectrogram, file_path)
     return spectrogram
 
 def show_spectrogram(spectrogram, description):
@@ -117,101 +188,83 @@ def show_spectrogram(spectrogram, description):
     subplot.set_yticklabels([])
     subplot.set_xticklabels([])
 
-    matplotlib.pyplot.imshow(spectrogram)
+    matplotlib.pyplot.imshow(spectrogram, cmap=matplotlib.pyplot.get_cmap('gray'))
     matplotlib.pyplot.show()
 
-def prepare_train_dataset():
+def prepare_dataset():
 
     print('[' + ctime() + ']: Train data preparation has started.')
     start_time = time_module.time()
 
-    class_offset = 4
+    train_labels = []
+    train_spectrograms = []
 
-    pixel_type = numpy.dtype(numpy.uint16)
-    factor = 1.0 / (numpy.iinfo(pixel_type).max - numpy.iinfo(pixel_type).min)
+    test_ids = []
+    test_spectrograms = []
 
-    labels = []
-    spectrograms = []
+    rec_id2filenames = []
+    with open(rec_id2filename, 'r') as rec_id2_filename:
+        with open(rec_id2test, 'r') as rec_id2_test:
+            with open(rec_id2label, 'r') as rec_ic2_label:
+                rec_id2_filename_str = rec_id2_filename.readline()
+                rec_id2_test_str = rec_id2_test.readline()
+                rec_ic2_label_str = rec_ic2_label.readline()
 
-    file_labels = open(labels_path)
-    file_labels.readline()
-    species = file_labels.readline()
-    auxiliary = file_labels.readline()
+                while True:
+                    rec_id2_filename_str = rec_id2_filename.readline()
+                    rec_id2_test_str = rec_id2_test.readline()
+                    rec_ic2_label_str = rec_ic2_label.readline()
+                    if rec_id2_filename_str == '':
+                        break
 
-    print(species)
-    print(auxiliary)
+                    [rec_id, filename] = rec_id2_filename_str.split(',')
+                    filename = filename.strip()
+                    filepath = os.path.abspath(os.path.join(wav_path, filename + '.wav'))
+                    if len(filter) > 0:
+                        valid = False
+                        for i in range(len(filter)):
+                            if filepath.find(filter[i]) != -1:
+                                valid = True
+                        if not valid:
+                            continue
 
-    class_names = species.split(',')[class_offset:]
-    print(class_names)
+                    spectrogram = cook_spectrogram(filepath)
 
-    file_index = 0
-    for file in os.listdir(wav_path_train):
+                    [rec_id_test, is_test] = rec_id2_test_str.split(',')
+                    if rec_id_test != rec_id:
+                        print('Record id mismatch.')
 
-        # read labels and set up classes
-        line = file_labels.readline()
-        classes = line.split(',')
-        label = numpy.zeros((1, output_classes))
-        description = ''
+                    if int(is_test) == 1:
+                        test_ids.append(rec_id)
+                        test_spectrograms.append(spectrogram)
+                        print('Test sample: {}, {}'.format(rec_id, filename))
+                    else:
+                        classes = rec_ic2_label_str.split(',')
 
-        for i in range(1, len(classes)):
-            if classes[i]:
-                label[(0, i - class_offset)] = 1.0
-                if description:
-                    description += ', '
-                description += class_names[i-class_offset]
+                        #if len(classes) == 1:
+                        #    print('Train sample: {} does not contain labels.'.format(rec_id))
+                        #    continue
 
-        if description is None:
-            continue
+                        train_spectrograms.append(spectrogram)
 
-        print('Description = {}'.format(description))
+                        label = numpy.zeros((1, output_classes))
+                        description = ''
 
-        file_path = os.path.abspath(os.path.join(wav_path_train, file))
-        spectrogram = cook_spectrogram(file_path)
-        if spectrogram is None:
-            continue
+                        for i in range(1, len(classes)):
+                            label[(0, int(classes[i]))] = 1.0
+                        train_labels.append(label)
 
-        spectrograms.append(spectrogram)
-        labels.append(label)
+                        print('Train sample: {}, {}, {}'.format(rec_id, filename, label))
+                        #show_spectrogram(spectrogram, filename)
 
-        file_index += 1
-        if file_index >= dataset_size:
-            break
+
+    print('Train size: {} '.format(len(train_spectrograms)))
+    print('Test size: {}'.format(len(test_spectrograms)))
 
     print('[' + ctime() + ']: Data preparation is complete.')
     end_time = time_module.time()
     elapsed_time = end_time - start_time
     print('Elapsed time = {} minutes and {} seconds'.format(int(elapsed_time / 60), int(elapsed_time % 60)))
+    print('Train data: {} Train labels: {} Test data: {} Test ids: {}'.format(len(train_spectrograms), len(train_labels), len(test_spectrograms), len(test_ids)))
 
-    return (spectrograms, labels)
-
-def prepare_test_dataset():
-
-    print('[' + ctime() + ']: Test data preparation has started.')
-    start_time = time_module.time()
-
-    files = []
-    spectrograms = []
-
-    file_index = 0
-    for file in os.listdir(wav_path_test):
-
-        label = numpy.zeros((1, output_classes))
-
-        file_path = os.path.abspath(os.path.join(wav_path_test, file))
-        spectrogram = cook_spectrogram(file_path)
-        if spectrogram is None:
-            continue
-
-        spectrograms.append(spectrogram)
-        files.append(os.path.basename(file_path))
-
-        file_index += 1
-        if file_index >= dataset_size:
-            break
-
-    print('[' + ctime() + ']: Test data preparation is complete.')
-    end_time = time_module.time()
-    elapsed_time = end_time - start_time
-    print('Elapsed time = {} minutes and {} seconds'.format(int(elapsed_time / 60), int(elapsed_time % 60)))
-
-    return (files, spectrograms)
+    return (train_spectrograms, train_labels, test_spectrograms, test_ids)
