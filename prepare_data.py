@@ -31,6 +31,57 @@ rec_id2label = os.path.join('mlsp_contest_dataset', 'essential_data', 'rec_label
 
 filter = [] #['PC4_20100705_050000_0010', 'PC4_20100705_050000_0020']
 
+def gaussian_filter(kernel_shape):
+    filter = numpy.zeros(kernel_shape)
+
+    def gauss(x, y, sigma = 2.0):
+        Z = 2 * numpy.pi * sigma ** 2
+        return  1.0 / Z * numpy.exp(-(x ** 2 + y ** 2) / (2.0 * sigma ** 2))
+
+    mid_x = numpy.floor(kernel_shape[0] / 2.0)
+    mid_y = numpy.floor(kernel_shape[1] / 2.0)
+
+    for i in range(kernel_shape[0]):
+        for j in range(kernel_shape[1]):
+            filter[i, j] = gauss(i - mid_x, j - mid_y)
+
+    return filter / numpy.sum(filter)
+
+def local_contrast_subtractive_transform(spectrogram, rows, columns):
+
+    result = numpy.copy(spectrogram)
+    filter = gaussian_filter( [13, 13] )
+
+    mid_x = int(numpy.floor(filter.shape[0] / 2.0))
+    mid_y = int(numpy.floor(filter.shape[1] / 2.0))
+    P = filter.shape[0]
+    Q = filter.shape[1]
+
+    for i in range(rows):
+        for j in range(columns):
+            x = 0.0
+            for p in range(P):
+                for q in range(Q):
+                    i_from = i - mid_x + p
+                    j_from = j - mid_y + q
+                    if i_from >= 0 and i_from < rows and j_from >= 0 and j_from < columns:
+                        x += spectrogram[i_from, j_from] * filter[p, q]
+            result[i, j] = result[i, j] - x
+
+    return result
+
+def subsample_max(spectrogram, rows, columns):
+    for i in range(0, rows-1, 2):
+        for j in range(0, columns-1, 2):
+            mx1 = max(spectrogram[i, j], spectrogram[i, j+1])
+            mx2 = max(spectrogram[i+1, j], spectrogram[i+1, j+1])
+            mx3 = max(mx1, mx2)
+
+            spectrogram[i, j] = mx3
+            spectrogram[i+1, j] = mx3
+            spectrogram[i, j+1] = mx3
+            spectrogram[i+1, j+1] = mx3
+
 def erode(spectrogram, rows, columns):
     for i in range(rows):
         for j in range(columns):
@@ -89,6 +140,16 @@ def median_filtering(spectrogram, rows, columns):
             else:
                 spectrogram[i, j] = 0.0;
 
+def print_statistics(spectrogram, file_path):
+
+    mx = numpy.max(spectrogram)
+    mn = numpy.min(spectrogram)
+
+    mean = numpy.mean(spectrogram)
+    std = numpy.std(spectrogram)
+
+    print('{}: max = {:.4f}, min = {:.4f}, mean = {:.4f}, stddev = {:.4f}'.format(file_path, mx, mn, mean, std))
+
 def cook_spectrogram(file_path):
 
     _, extension = os.path.splitext(file_path)
@@ -136,11 +197,11 @@ def cook_spectrogram(file_path):
             value = numpy.abs(fourier[(0, i)])
             fourier_normalized_absolute[(0, i)] = value
 
-        for i in range(rows):
-            fourier_normalized_converted[(0, i)] = 20 * numpy.log10(fourier_normalized_absolute[(0, i)] + 1.0)
-
         #for i in range(rows):
-        #    fourier_normalized_converted[(0, i)] = numpy.sqrt(fourier_normalized_absolute[(0, i)] + 1.0)
+        #    fourier_normalized_converted[(0, i)] = 20 * numpy.log10(fourier_normalized_absolute[(0, i)] + 1.0)
+
+        for i in range(rows):
+            fourier_normalized_converted[(0, i)] = numpy.sqrt(fourier_normalized_absolute[(0, i)] + 1.0)
 
         #for i in range(rows):
         #    fourier_normalized_converted[(0, i)] = fourier_normalized_absolute[(0, i)]
@@ -153,30 +214,30 @@ def cook_spectrogram(file_path):
 
     print('{}: columns = {}'.format(file_path, index))
 
-    mx = numpy.max(spectrogram)
-    mn = numpy.min(spectrogram)
-
-    mean = numpy.mean(spectrogram)
-    #spectrogram -= mean
-    std = numpy.std(spectrogram)
-    #spectrogram /= std
-
-    spectrogram = (spectrogram - mn) / (mx - mn)
-
-    #spectrogram = numpy.sqrt(spectrogram)
-
-    print('{}: max = {:.4f}, min = {:.4f}, mean = {:.4f}, stddev = {:.4f}'.format(file_path, mx, mn, mean, std))
-
     columns = max_spectrogram_length
 
     #erode(spectrogram, rows, columns)
     #dilate(spectrogram, rows, columns)
 
-    #show_spectrogram(spectrogram, file_path)
+    print_statistics(spectrogram, file_path)
+    show_spectrogram(spectrogram, file_path)
+
+    spectrogram = local_contrast_subtractive_transform(spectrogram, rows, columns)
+    print_statistics(spectrogram, file_path)
+
+    mean = numpy.mean(spectrogram)
+    std = numpy.std(spectrogram)
+
+    spectrogram = spectrogram - mean
+    spectrogram = spectrogram / std
+    print_statistics(spectrogram, file_path)
+    show_spectrogram(spectrogram, file_path)
+
     return spectrogram
 
 def show_spectrogram(spectrogram, description):
 
+    return
     display_count = 1
     figure = matplotlib.pyplot.figure()
 
@@ -248,6 +309,7 @@ def prepare_dataset():
                         train_spectrograms.append(spectrogram)
 
                         label = numpy.zeros((1, output_classes))
+                        label.fill(0.5)
                         description = ''
 
                         for i in range(1, len(classes)):

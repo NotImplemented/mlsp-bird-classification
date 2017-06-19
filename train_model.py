@@ -1,6 +1,7 @@
 import os
 import sys
 import numpy
+import shutil
 import random
 import tensorflow
 from skimage.measure.tests.test_pnpoly import test_npnpoly
@@ -12,7 +13,7 @@ import nn_schema
 batch_size = 8
 learning_epochs = 100
 output_classes = 19
-learning_rate = 0.00005
+learning_rate = 0.00001
 
 def shuffle(a, b):
     combined = list(zip(a, b))
@@ -28,10 +29,12 @@ def normalize(x):
 
     if mn != mx:
         x = (x - mn) / (mx - mn)
+    else:
+        x -= x
     
     return x
 
-summaries_directory = (os.path.join('Projects', 'mlsp_bird_classification', 'summary'))
+summaries_directory = (os.path.join('tensorflow', 'summary'))
 
 input_size_height = prepare_data.image_rows
 input_size_width = prepare_data.image_columns
@@ -50,6 +53,8 @@ print('Image tensor size = {}'.format(x_image.get_shape()))
 y_output = nn_schema.create_schema(x_image, output_classes, keep_probability)
 y_output_sigmoid = tensorflow.nn.sigmoid(y_output, name="predictions")
 
+print('Cleaning summary folder = {}'.format(summaries_directory))
+shutil.rmtree(summaries_directory, ignore_errors=True)
 
 with tensorflow.name_scope('cross_entropy'):
     with tensorflow.name_scope('difference'):
@@ -121,8 +126,9 @@ while(True):
         print("Step #%d Epoch #%d: shuffle train data" % (step, epoch))
         print("Step #%d Epoch #%d: writing summary" % (step, epoch))
 
-    #output = y_output_sigmoid.eval(feed_dict = {x_place: batch, keep_probability: 1.0})
-    #print('Labels = {}, predictions = {}'.format(label, output))
+    output = y_output_sigmoid.eval(feed_dict = {x_place: batch, keep_probability: 1.0})
+    print('Labels = {}'.format(label))
+    print('Predictions = {}'.format( output))
 
     print("Step #%d Epoch #%d: cross-entropy = %g, images = %d" % (step, epoch, cross_entropy_batch, index))
 

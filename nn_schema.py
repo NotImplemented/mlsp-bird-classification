@@ -2,17 +2,17 @@ import tensorflow
 
 def weight_variable(shape):
 
-    #initial = tensorflow.contrib.layers.xavier_initializer_conv2d()
-    #variable = tensorflow.Variable(initial(shape))
+    initial = tensorflow.contrib.layers.xavier_initializer_conv2d()
+    variable = tensorflow.Variable(initial(shape))
 
-    initial = tensorflow.truncated_normal(shape, stddev = 0.4)
-    variable = tensorflow.Variable(initial)
+    #initial = tensorflow.truncated_normal(shape, stddev = 0.4)
+    #variable = tensorflow.Variable(initial)
 
     return variable
 
 def bias_variable(shape):
 
-    initial = tensorflow.constant(0.4, shape = shape)
+    initial = tensorflow.constant(0.06, shape = shape)
     return tensorflow.Variable(initial)
 
 def convolution_layer(x, W):
@@ -84,21 +84,21 @@ def create_max_pooling_layer(layer_name, input_tensor):
 
 def create_convolution_layers(input_image):
 
-    #pool_0th = create_avg_pooling_layer('pool-0th', input_image, 2, 2)
+    pool_0th = create_max_pooling_layer('pool-0th', input_image)
 
-    conv_1st = create_convolution_layer('conv-1st', input_image, 5, 5, 1, 64)
+    conv_1st = create_convolution_layer('conv-1st', pool_0th, 5, 5, 1, 64)
     pool_1st = create_max_pooling_layer('pool-1st', conv_1st)
 
-    conv_2nd = create_convolution_layer('conv-2nd', pool_1st, 5, 5, 64, 64)
+    conv_2nd = create_convolution_layer('conv-2nd', pool_1st, 5, 5, 64, 128)
     pool_2nd = create_max_pooling_layer('pool-2nd', conv_2nd)
 
-    conv_3rd = create_convolution_layer('conv-3rd', pool_2nd, 5, 5, 64, 128)
+    conv_3rd = create_convolution_layer('conv-3rd', pool_2nd, 5, 5, 128, 128)
     pool_3rd = create_max_pooling_layer('pool-3rd', conv_3rd)
 
     conv_4th = create_convolution_layer('conv-4th', pool_3rd, 5, 5, 128, 256)
     pool_4th = create_max_pooling_layer('pool-4th', conv_4th)
     
-    conv_5th = create_convolution_layer('conv-5th', pool_4th, 3, 3, 256, 256)
+    conv_5th = create_convolution_layer('conv-5th', pool_4th, 5, 5, 256, 512)
     pool_5th = create_max_pooling_layer('pool-5th', conv_5th)
 
     return pool_5th
@@ -122,10 +122,10 @@ def create_fully_connected_layers(input_layer, output_classes, keep_probability)
 
     _, num_rows, num_columns, num_features = input_layer.get_shape().as_list()
 
-    fc_1st = create_fully_connected_layer('fc-1st', input_layer, num_rows * num_columns * num_features, 256)
+    fc_1st = create_fully_connected_layer('fc-1st', input_layer, num_rows * num_columns * num_features, 1024)
     fc1_drop = tensorflow.nn.dropout(fc_1st, keep_probability)
 
-    fc_2nd = create_fully_connected_layer('fc-2nd', fc1_drop, 256, output_classes)
+    fc_2nd = create_fully_connected_layer('fc-2nd', fc1_drop, 1024, output_classes)
 
     return fc_2nd
 
