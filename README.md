@@ -4,7 +4,7 @@ AUC-ROC = 0.72
 
 NN-schema:</br>
   </t>contrast subtractive layer 13x13</br>
-  max-pool 2x2</br>
+  </t>max-pool 2x2</br>
   conv 5x5 64 filters</br>
   max-pool 2x2</br>
   conv 5x5 128 filters</br>
