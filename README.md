@@ -3,20 +3,20 @@
 AUC-ROC = 0.72
 
 NN-schema:</br>
-  </t>contrast subtractive layer 13x13</br>
-  </t>max-pool 2x2</br>
-  conv 5x5 64 filters</br>
-  max-pool 2x2</br>
-  conv 5x5 128 filters</br>
-  max-pool 2x2</br>
-  conv 5x5 128 filters</br>
-  max-pool 2x2</br>
-  conv 5x5 256 filters</br>
-  max-pool 2x2</br>
-  conv 5x5 512 filters</br>
-  max-pool 2x2</br>
-  fully-connected 1024 nodes</br>
-  output 19 nodes with sigmoid activation function</br>
+  - contrast subtractive layer 13x13</br>
+  - max-pool 2x2</br>
+  - conv 5x5 64 filters</br>
+  - max-pool 2x2</br>
+  - conv 5x5 128 filters</br>
+  - max-pool 2x2</br>
+  - conv 5x5 128 filters</br>
+  - max-pool 2x2</br>
+  - conv 5x5 256 filters</br>
+  - max-pool 2x2</br>
+  - conv 5x5 512 filters</br>
+  - max-pool 2x2</br>
+  - fully-connected 1024 nodes</br>
+  - output 19 nodes with sigmoid activation function</br>
 
 Weights initialization: 
   - xavier initialization for convolution filters
