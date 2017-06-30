@@ -309,7 +309,7 @@ def prepare_dataset():
                         train_spectrograms.append(spectrogram)
 
                         label = numpy.zeros((1, output_classes))
-                        label.fill(0.5)
+                        label.fill(0.0)
                         description = ''
 
                         for i in range(1, len(classes)):

@@ -13,7 +13,7 @@ import nn_schema
 batch_size = 8
 learning_epochs = 100
 output_classes = 19
-learning_rate = 0.00001
+learning_rate = 0.00005
 
 def shuffle(a, b):
     combined = list(zip(a, b))
@@ -41,28 +41,28 @@ input_size_width = prepare_data.image_columns
 
 keep_probability = tensorflow.placeholder(tensorflow.float32)
 
-x_place = tensorflow.placeholder(tensorflow.float32, shape=[None, input_size_height, input_size_width], name="input")
+x_place = tensorflow.placeholder(tensorflow.float32, shape = [None, input_size_height, input_size_width], name="input")
 print('Input tensor size = {}'.format(x_place.get_shape()))
 
-y_place = tensorflow.placeholder(tensorflow.float32, shape=[None, output_classes])
+y_place = tensorflow.placeholder(tensorflow.float32, shape = [None, output_classes])
 print('Output tensor size = {}'.format(y_place.get_shape()))
 
 x_image = tensorflow.reshape(x_place, [-1, input_size_height, input_size_width, 1])
 print('Image tensor size = {}'.format(x_image.get_shape()))
 
 y_output = nn_schema.create_schema(x_image, output_classes, keep_probability)
-y_output_sigmoid = tensorflow.nn.sigmoid(y_output, name="predictions")
 
 print('Cleaning summary folder = {}'.format(summaries_directory))
 shutil.rmtree(summaries_directory, ignore_errors=True)
 
 with tensorflow.name_scope('cross_entropy'):
+    
     with tensorflow.name_scope('difference'):
-        sigmoid_cross_entropy_with_logits = tensorflow.nn.sigmoid_cross_entropy_with_logits(y_output, y_place)
-        tensorflow.summary.histogram('sigmoid_cross_entropy_with_logits', sigmoid_cross_entropy_with_logits)
+        cost = tensorflow.square(y_output - y_place)
+        tensorflow.summary.histogram('cost', cost)
 
     with tensorflow.name_scope('total'):
-        cross_entropy = tensorflow.reduce_mean(sigmoid_cross_entropy_with_logits)
+        cross_entropy = tensorflow.reduce_mean(cost)
 
 tensorflow.summary.scalar('cross_entropy', cross_entropy)
 
@@ -126,7 +126,7 @@ while(True):
         print("Step #%d Epoch #%d: shuffle train data" % (step, epoch))
         print("Step #%d Epoch #%d: writing summary" % (step, epoch))
 
-    output = y_output_sigmoid.eval(feed_dict = {x_place: batch, keep_probability: 1.0})
+    output = y_output.eval(feed_dict = {x_place: batch, keep_probability: 1.0})
     print('Labels = {}'.format(label))
     print('Predictions = {}'.format( output))
 
@@ -138,7 +138,7 @@ for i in range(len(train_images)):
     image = numpy.ndarray((1, input_size_height, input_size_width))
     image[0,:] = train_images[i]
 
-    output = y_output_sigmoid.eval(feed_dict = {x_place: image.reshape((1, input_size_height, input_size_width)), keep_probability: 1.0})
+    output = y_output.eval(feed_dict = {x_place: image.reshape((1, input_size_height, input_size_width)), keep_probability: 1.0})
     print('Train image {}: labels = {}, predictions = {}'.format(i, train_labels[i], output))
 
 print('Starting evaluating predictions.\n')
@@ -149,7 +149,7 @@ with open('test_predictions.csv', 'w') as test_predictions_file:
     for i in range(len(test_ids)):
         id = test_ids[i]
         test_image = test_images[i]
-        output = y_output_sigmoid.eval(feed_dict = {x_place: test_image.reshape((1, input_size_height, input_size_width)), keep_probability: 1.0})
+        output = y_output.eval(feed_dict = {x_place: test_image.reshape((1, input_size_height, input_size_width)), keep_probability: 1.0})
         output = normalize(output)
         for j in range(output_classes):
             combined_id = int(id) * 100 + j

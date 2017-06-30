@@ -16,13 +16,16 @@ def bias_variable(shape):
     return tensorflow.Variable(initial)
 
 def convolution_layer(x, W):
-    return tensorflow.nn.conv2d(x, W, strides=[1, 1, 1, 1], padding='SAME')
+    return tensorflow.nn.conv2d(x, W, strides=[1, 1, 1, 1], padding='VALID')
 
 def max_pooling_layer(x, height = 2, width = 2):
-    return tensorflow.nn.max_pool(x, ksize=[1, height, width, 1], strides=[1, height, width, 1], padding='SAME')
+    return tensorflow.nn.max_pool(x, ksize=[1, height, width, 1], strides=[1, height, width, 1], padding='VALID')
 
 def avg_pooling_layer(x, height = 2, width = 2):
-    return tensorflow.nn.avg_pool(x, ksize=[1, height, width, 1], strides=[1, height, width, 1], padding='SAME')
+    return tensorflow.nn.avg_pool(x, ksize=[1, height, width, 1], strides=[1, height, width, 1], padding='VALID')
+
+def tanh_layer(x):
+    return tensorflow.nn.tanh(x)
 
 def variable_summaries(var):
 
@@ -72,7 +75,17 @@ def create_avg_pooling_layer(layer_name, input_tensor, width, height):
 
         return h_pooling
 
-def create_max_pooling_layer(layer_name, input_tensor):
+def create_tanh_layer(layer_name, input_tensor):
+
+    with tensorflow.name_scope(layer_name):
+        h_tanh = tanh_layer(input_tensor)
+        print('tahn size = {}'.format(h_tanh.get_shape()))
+
+        tensorflow.summary.histogram('subsampling', h_tanh)
+
+        return h_tanh
+
+def create_max_pooling_layer(layer_name, input_tensor, width = 2, height = 2):
 
     with tensorflow.name_scope(layer_name):
         h_pooling = max_pooling_layer(input_tensor)
@@ -86,20 +99,20 @@ def create_convolution_layers(input_image):
 
     pool_0th = create_max_pooling_layer('pool-0th', input_image)
 
-    conv_1st = create_convolution_layer('conv-1st', pool_0th, 5, 5, 1, 64)
+    conv_1st = create_convolution_layer('conv-1st', pool_0th, 5, 5, 1, 16)
     pool_1st = create_max_pooling_layer('pool-1st', conv_1st)
 
-    conv_2nd = create_convolution_layer('conv-2nd', pool_1st, 5, 5, 64, 128)
+    conv_2nd = create_convolution_layer('conv-2nd', pool_1st, 5, 5, 16, 32)
     pool_2nd = create_max_pooling_layer('pool-2nd', conv_2nd)
 
-    conv_3rd = create_convolution_layer('conv-3rd', pool_2nd, 5, 5, 128, 128)
+    conv_3rd = create_convolution_layer('conv-3rd', pool_2nd, 5, 5, 32, 64)
     pool_3rd = create_max_pooling_layer('pool-3rd', conv_3rd)
 
-    conv_4th = create_convolution_layer('conv-4th', pool_3rd, 5, 5, 128, 256)
+    conv_4th = create_convolution_layer('conv-4th', pool_3rd, 5, 5, 64, 128)
     pool_4th = create_max_pooling_layer('pool-4th', conv_4th)
     
-    conv_5th = create_convolution_layer('conv-5th', pool_4th, 5, 5, 256, 512)
-    pool_5th = create_max_pooling_layer('pool-5th', conv_5th)
+    conv_5th = create_convolution_layer('conv-5th', pool_4th, 4, 4, 128, output_classes)
+    tanh = create_tanh_layer('tanh', conv_5th)
 
     return pool_5th
 
@@ -131,7 +144,29 @@ def create_fully_connected_layers(input_layer, output_classes, keep_probability)
 
 def create_schema(x_image, output_classes, keep_probability):
 
-    last_convolution = create_convolution_layers(x_image)
-    output = create_fully_connected_layers(last_convolution, output_classes, keep_probability)
+
+    #last_convolution = create_convolution_layers(x_image)
+    #output = create_fully_connected_layers(last_convolution, output_classes, keep_probability)
+
+    pool_0th = create_max_pooling_layer('pool-0th', x_image)
+
+    conv_1st = create_convolution_layer('conv-1st', pool_0th, 5, 5, 1, 16)
+    pool_1st = create_max_pooling_layer('pool-1st', conv_1st)
+
+    conv_2nd = create_convolution_layer('conv-2nd', pool_1st, 5, 5, 16, 32)
+    pool_2nd = create_max_pooling_layer('pool-2nd', conv_2nd)
+
+    conv_3rd = create_convolution_layer('conv-3rd', pool_2nd, 5, 5, 32, 64)
+    pool_3rd = create_max_pooling_layer('pool-3rd', conv_3rd)
+
+    conv_4th = create_convolution_layer('conv-4th', pool_3rd, 5, 5, 64, 128)
+    pool_4th = create_max_pooling_layer('pool-4th', conv_4th)
+    
+    conv_5th = create_convolution_layer('conv-5th', pool_4th, 4, 4, 128, output_classes)
+    tanh = create_tanh_layer('tanh', conv_5th)
+
+    output = tensorflow.nn.max_pool(tanh, ksize=[1, 1, 32, 1], strides=[1, 1, 1, 1], padding='VALID')
+    print('output size = {}'.format(output.get_shape()))
+
 
     return output
