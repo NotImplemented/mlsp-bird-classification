@@ -1,4 +1,5 @@
 import tensorflow
+import numpy
 
 def weight_variable(shape):
 
@@ -10,8 +11,24 @@ def weight_variable(shape):
 
     return variable
 
-def bias_variable(shape):
+def gaussian_filter(kernel_shape):
+    filter = numpy.zeros(kernel_shape)
 
+    def gauss(x, y, sigma = 2.0):
+        Z = 2 * numpy.pi * sigma ** 2
+        return  1.0 / Z * numpy.exp(-(x ** 2 + y ** 2) / (2.0 * sigma ** 2))
+
+    mid_x = numpy.floor(kernel_shape[0] / 2.0)
+    mid_y = numpy.floor(kernel_shape[1] / 2.0)
+
+    for i in range(kernel_shape[0]):
+        for j in range(kernel_shape[1]):
+            filter[i, j] = gauss(i - mid_x, j - mid_y)
+
+    return filter / numpy.sum(filter)
+
+
+def bias_variable(shape):
     initial = tensorflow.constant(0.06, shape = shape)
     return tensorflow.Variable(initial)
 
@@ -41,7 +58,6 @@ def variable_summaries(var):
         tensorflow.summary.scalar('max', tensorflow.reduce_max(var))
         tensorflow.summary.scalar('min', tensorflow.reduce_min(var))
         tensorflow.summary.histogram('histogram', var)
-
 
 def create_convolution_layer(layer_name, input_tensor, width, height, input_features, output_features):
 
@@ -95,6 +111,20 @@ def create_max_pooling_layer(layer_name, input_tensor, width = 2, height = 2):
 
         return h_pooling
 
+def create_contrast_layer(x, shape, layer_name):
+
+    with tensorflow.name_scope(layer_name):
+        gaussian = gaussian_filter(shape)
+        filter = tensorflow.constant(gaussian, tensorflow.float32)
+        reshaped_filter = tensorflow.reshape(filter, [13, 13, 1, 1])
+        weights = tensorflow.Variable(reshaped_filter)
+        h_convolution = tensorflow.nn.conv2d(x, weights, strides=[1, 1, 1, 1], padding='SAME')
+
+        print('h_convolution size = {}'.format(h_convolution.get_shape()))
+        tensorflow.summary.histogram('activations-convolution', h_convolution)
+
+        return h_convolution
+
 def create_convolution_layers(input_image):
 
     pool_0th = create_max_pooling_layer('pool-0th', input_image)
@@ -144,11 +174,9 @@ def create_fully_connected_layers(input_layer, output_classes, keep_probability)
 
 def create_schema(x_image, output_classes, keep_probability):
 
+    contrast = create_contrast_layer(x_image, [13, 13], 'contrast-0th')
 
-    #last_convolution = create_convolution_layers(x_image)
-    #output = create_fully_connected_layers(last_convolution, output_classes, keep_probability)
-
-    pool_0th = create_max_pooling_layer('pool-0th', x_image)
+    pool_0th = create_max_pooling_layer('pool-0th', contrast)
 
     conv_1st = create_convolution_layer('conv-1st', pool_0th, 5, 5, 1, 16)
     pool_1st = create_max_pooling_layer('pool-1st', conv_1st)
@@ -165,7 +193,7 @@ def create_schema(x_image, output_classes, keep_probability):
     conv_5th = create_convolution_layer('conv-5th', pool_4th, 4, 4, 128, output_classes)
     tanh = create_tanh_layer('tanh', conv_5th)
 
-    output = tensorflow.nn.max_pool(tanh, ksize=[1, 1, 32, 1], strides=[1, 1, 1, 1], padding='VALID')
+    output = tensorflow.nn.max_pool(tanh, ksize=[1, 1, 32, 1], strides=[1, 1, 1, 1], padding='VALID', name='predictions')
     print('output size = {}'.format(output.get_shape()))
 
 

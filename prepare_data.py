@@ -28,8 +28,18 @@ wav_path = os.path.join('mlsp_contest_dataset', 'essential_data', 'src_wavs')
 rec_id2filename = os.path.join('mlsp_contest_dataset', 'essential_data', 'rec_id2filename.txt')
 rec_id2test = os.path.join('mlsp_contest_dataset', 'essential_data', 'CVfolds_2.txt')
 rec_id2label = os.path.join('mlsp_contest_dataset', 'essential_data', 'rec_labels_test_hidden.txt')
+rec_id2label_hidden = os.path.join('mlsp_contest_dataset', 'essential_data', 'rec_labels_test.txt')
 
 filter = [] #['PC4_20100705_050000_0010', 'PC4_20100705_050000_0020']
+show_image = False
+use_hidden = True
+
+def parse_int(value):
+    try:
+        int(value)
+        return True
+    except:
+        return False
 
 def gaussian_filter(kernel_shape):
     filter = numpy.zeros(kernel_shape)
@@ -222,8 +232,8 @@ def cook_spectrogram(file_path):
     print_statistics(spectrogram, file_path)
     show_spectrogram(spectrogram, file_path)
 
-    spectrogram = local_contrast_subtractive_transform(spectrogram, rows, columns)
-    print_statistics(spectrogram, file_path)
+    #spectrogram = local_contrast_subtractive_transform(spectrogram, rows, columns)
+    #print_statistics(spectrogram, file_path)
 
     mean = numpy.mean(spectrogram)
     std = numpy.std(spectrogram)
@@ -237,7 +247,9 @@ def cook_spectrogram(file_path):
 
 def show_spectrogram(spectrogram, description):
 
-    return
+    if show_image == False:
+        return
+
     display_count = 1
     figure = matplotlib.pyplot.figure()
 
@@ -267,57 +279,68 @@ def prepare_dataset():
     with open(rec_id2filename, 'r') as rec_id2_filename:
         with open(rec_id2test, 'r') as rec_id2_test:
             with open(rec_id2label, 'r') as rec_ic2_label:
-                rec_id2_filename_str = rec_id2_filename.readline()
-                rec_id2_test_str = rec_id2_test.readline()
-                rec_ic2_label_str = rec_ic2_label.readline()
-
-                while True:
+                with open(rec_id2label_hidden, 'r') as rec_ic2_label_hidden:
                     rec_id2_filename_str = rec_id2_filename.readline()
                     rec_id2_test_str = rec_id2_test.readline()
                     rec_ic2_label_str = rec_ic2_label.readline()
-                    if rec_id2_filename_str == '':
-                        break
+                    rec_ic2_label_hidden_str = rec_ic2_label_hidden.readline()
 
-                    [rec_id, filename] = rec_id2_filename_str.split(',')
-                    filename = filename.strip()
-                    filepath = os.path.abspath(os.path.join(wav_path, filename + '.wav'))
-                    if len(filter) > 0:
-                        valid = False
-                        for i in range(len(filter)):
-                            if filepath.find(filter[i]) != -1:
-                                valid = True
-                        if not valid:
-                            continue
+                    while True:
+                        rec_id2_filename_str = rec_id2_filename.readline()
+                        rec_id2_test_str = rec_id2_test.readline()
+                        rec_ic2_label_str = rec_ic2_label.readline()
+                        rec_ic2_label_hidden_str = rec_ic2_label_hidden.readline()
+                        if rec_id2_filename_str == '':
+                            break
 
-                    spectrogram = cook_spectrogram(filepath)
+                        [rec_id, filename] = rec_id2_filename_str.split(',')
+                        filename = filename.strip()
+                        filepath = os.path.abspath(os.path.join(wav_path, filename + '.wav'))
+                        if len(filter) > 0:
+                            valid = False
+                            for i in range(len(filter)):
+                                if filepath.find(filter[i]) != -1:
+                                    valid = True
+                            if not valid:
+                                continue
 
-                    [rec_id_test, is_test] = rec_id2_test_str.split(',')
-                    if rec_id_test != rec_id:
-                        print('Record id mismatch.')
+                        spectrogram = cook_spectrogram(filepath)
 
-                    if int(is_test) == 1:
-                        test_ids.append(rec_id)
-                        test_spectrograms.append(spectrogram)
-                        print('Test sample: {}, {}'.format(rec_id, filename))
-                    else:
-                        classes = rec_ic2_label_str.split(',')
+                        [rec_id_test, is_test] = rec_id2_test_str.split(',')
+                        if rec_id_test != rec_id:
+                            print('Record id mismatch.')
 
-                        #if len(classes) == 1:
-                        #    print('Train sample: {} does not contain labels.'.format(rec_id))
-                        #    continue
+                        if int(is_test) == 1:
+                            test_ids.append(rec_id)
+                            test_spectrograms.append(spectrogram)
+                            print('Test sample: {}, {}'.format(rec_id, filename))
 
-                        train_spectrograms.append(spectrogram)
+                            if use_hidden:
+                                classes = rec_ic2_label_hidden_str.split(',')
+                                train_spectrograms.append(spectrogram)
 
-                        label = numpy.zeros((1, output_classes))
-                        label.fill(0.0)
-                        description = ''
+                                label = numpy.zeros((1, output_classes))
 
-                        for i in range(1, len(classes)):
-                            label[(0, int(classes[i]))] = 1.0
-                        train_labels.append(label)
+                                for i in range(1, len(classes)):
+                                    if parse_int(classes[i]):
+                                        label[(0, int(classes[i]))] = 1.0
 
-                        print('Train sample: {}, {}, {}'.format(rec_id, filename, label))
-                        #show_spectrogram(spectrogram, filename)
+                                train_labels.append(label)
+
+                                print('Test sample hidden: {}, {}, {}'.format(rec_id, filename, label))
+
+                        else:
+                            classes = rec_ic2_label_str.split(',')
+
+                            train_spectrograms.append(spectrogram)
+                            label = numpy.zeros((1, output_classes))
+
+                            for i in range(1, len(classes)):
+                                    if parse_int(classes[i]):
+                                        label[(0, int(classes[i]))] = 1.0
+                            train_labels.append(label)
+
+                            print('Train sample: {}, {}, {}'.format(rec_id, filename, label))
 
 
     print('Train size: {} '.format(len(train_spectrograms)))

@@ -11,7 +11,7 @@ import prepare_data
 import nn_schema
 
 batch_size = 8
-learning_epochs = 100
+learning_epochs = 150
 output_classes = 19
 learning_rate = 0.00005
 
@@ -153,7 +153,7 @@ with open('test_predictions.csv', 'w') as test_predictions_file:
         output = normalize(output)
         for j in range(output_classes):
             combined_id = int(id) * 100 + j
-            probability = output[(0, j)]
+            probability = output[(0, 0, 0, j)]
             test_predictions_file.write('{}, {}\n'.format(combined_id , probability) )
 
 
