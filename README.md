@@ -1,6 +1,6 @@
 # mlsp-bird-classification
 
-AUC-ROC = 0.72
+AUC-ROC = 0.85
 
 NN-schema:</br>
   - contrast subtractive layer 13x13</br>
@@ -22,5 +22,5 @@ Weights initialization:
   - xavier initialization for convolution filters
   - 0.06 for bias
 
-Batch size = 8, epochs = 100, learning rate 0.00001 using Adam optimizer.</br>
+Batch size = 8, epochs = 200, learning rate 0.00004 using Adam optimizer.</br>
 Spectrograms are build using 512 size sliding Hann window with 3/4 overlap and are normalized to zero mean and unit variance.
